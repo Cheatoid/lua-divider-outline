@@ -7,12 +7,13 @@
 
 ![Preview](.resources/preview.png)
 
-Simple and useful productivity boost for (large) Lua files. It adds fast, clean navigation for `--` divider sections directly to the Outline (in Explorer tab), making huge single-file Lua modules much easier to scan and jump around.  
-Especially useful alongside the **Lua/LuaLS (sumneko)** extension, where your custom sections and actual Lua symbols live together in one navigable structure.
+If your Lua files get long, this helps. It picks up your `--` divider comments and shows them in the Outline (in the Explorer tab), so you can jump around a big file without scrolling forever.
+
+It plays nice with the **Lua / LuaLS (sumneko)** extension. Your dividers show up next to the real Lua symbols, nothing gets replaced.
 
 ## Main header
 
-The default main-header format is exactly:
+This is what it looks for by default:
 
 ```lua
 ----------------------------------------------------------------------
@@ -20,9 +21,9 @@ The default main-header format is exactly:
 ----------------------------------------------------------------------
 ```
 
-Both separator lines must contain exactly 70 `-` characters by default. The separator lines are matched as literal lines of dashes; the middle line must be a Lua `--` comment.
+Both separator lines need exactly 70 `-` characters unless you change the setting. The middle line has to be a `--` comment with your title on it.
 
-Commented separator lines are also accepted:
+Lines with `--` in front of the dashes work too:
 
 ```lua
 -- ----------------------------------------------------------------------
@@ -30,17 +31,63 @@ Commented separator lines are also accepted:
 -- ----------------------------------------------------------------------
 ```
 
-The extension registers a `DocumentSymbolProvider` only for Lua. VS Code merges multiple document-symbol providers, so LuaLS symbols remain available alongside these divider sections.
+Only Lua files get scanned.
+
+## Inserting a divider
+
+Run **Lua Divider Outline: Insert Divider Section** (or right-click in a Lua file and pick it) and it drops a full header at your cursor:
+
+```lua
+local x = 1
+----------------------------------------------------------------------
+-- Section
+----------------------------------------------------------------------
+```
+
+It uses your `separatorLength`, so the new divider shows up in the Outline right away. It keeps the indentation of the line you're on, and you can split a line in the middle if you want. Multiple cursors work, everything lands in one undo step.
+
+The word `Section` (or whatever you set) comes out selected, so just type over it.
+
+## Jumping between dividers
+
+Two palette commands:
+
+- **Lua Divider Outline: Go to Next Divider Section**
+- **Lua Divider Outline: Go to Previous Divider Section**
+
+They jump to the nearest divider title and wrap around at the top/bottom. If there's nothing to jump to, you'll see *No divider sections found* down in the status bar.
+
+There are no keybindings by default. If you want some, these two don't clash with much:
+
+```json
+[
+  { "key": "alt+shift+[", "command": "luaDividerOutline.goToPreviousDivider", "when": "editorLangId == lua" },
+  { "key": "alt+shift+]", "command": "luaDividerOutline.goToNextDivider", "when": "editorLangId == lua" }
+]
+```
 
 ## One-line subheaders
 
-By default, this also recognizes:
+On by default. These show up nested under the section above them:
 
 ```lua
 -- ------------------------------ My Subsection ------------------------------
 ```
 
-Subheaders are nested beneath the enclosing main header in this extension's symbols.
+A subsection covers everything down to the next subsection or section. A section covers everything down to the next section (or the end of the file).
+
+## Right-click: select, copy, cut, delete
+
+Right-click in a Lua file and you'll see:
+
+- **Select Divider Section**
+- **Copy Divider Section**
+- **Cut Divider Section**
+- **Delete Divider Section**
+
+They grab the whole thing under your cursor, header plus the code below it, down to the next divider. If you're sitting inside a subsection, you get just that subsection. If you're on plain code between subsections, you get the full section.
+
+Same commands are also on right-click in the **Lua Dividers** view (Explorer sidebar). VS Code does not let extensions add items to the built-in Outline row menu (see [microsoft/vscode#49925](https://github.com/microsoft/vscode/issues/49925)), so this extension ships its own Dividers tree where Select / Copy / Cut / Delete work from the clicked row, including multi-select. Click a row to jump to its title.
 
 ## Settings
 
@@ -48,9 +95,77 @@ Subheaders are nested beneath the enclosing main header in this extension's symb
 {
   "luaDividerOutline.separatorLength": 70,
   "luaDividerOutline.allowCommentedSeparators": true,
+  "luaDividerOutline.showHintText": false,
+  "luaDividerOutline.showLineNumbers": true,
   "luaDividerOutline.subheaders.enabled": true,
   "luaDividerOutline.subheaders.minimumDashLength": 3,
-  "luaDividerOutline.subheaders.maximumDashLength": 200
+  "luaDividerOutline.subheaders.maximumDashLength": 200,
+  "luaDividerOutline.insert.defaultTitle": "Section",
+  "luaDividerOutline.decorations.enabled": true,
+  "luaDividerOutline.decorations.titleBold": true,
+  "luaDividerOutline.decorations.titleColor": "#ffffff",
+  "luaDividerOutline.decorations.separatorDim": true,
+  "luaDividerOutline.decorations.separatorOpacity": 0.65
+}
+```
+
+By default you see line numbers in the Outline, like this:
+
+```
+Alpha  1-6
+  Sub  5-6
+Beta   7-9
+```
+
+That's `showLineNumbers`. Turn it off and you just get clean titles. Turn `showHintText` on if you want the little `divider section` / `divider subsection` labels back. Line numbers win when both are on. Both are resource-scoped, so a workspace can override them in `.vscode/settings.json`:
+
+```json
+{
+  "luaDividerOutline.showHintText": true
+}
+```
+
+```json
+{
+  "luaDividerOutline.showLineNumbers": false
+}
+```
+
+The insert title is also per-workspace / per-folder. Empty means `Section`:
+
+```json
+{
+  "luaDividerOutline.insert.defaultTitle": "Overview"
+}
+```
+
+## Title styling in the editor
+
+Divider titles get painted right in the file. Bold white by default:
+
+```json
+{
+  "luaDividerOutline.decorations.enabled": true,
+  "luaDividerOutline.decorations.titleBold": true,
+  "luaDividerOutline.decorations.titleColor": "#ffffff"
+}
+```
+
+Both main titles and subheaders use it. Clear it to `""` to keep your theme's comment color. Turn `decorations.enabled` off if you want the file left completely alone.
+
+The `------` lines above and below each title are faded a bit so the title pops. Turn that off with:
+
+```json
+{
+  "luaDividerOutline.decorations.separatorDim": false
+}
+```
+
+Or dial how faded they are, from `0.1` (barely there) to `1` (normal text):
+
+```json
+{
+  "luaDividerOutline.decorations.separatorOpacity": 0.65
 }
 ```
 
@@ -62,7 +177,7 @@ Install dependencies:
 npm install
 ```
 
-Validate the extension JavaScript:
+Check the JS:
 
 ```bash
 npm run check
@@ -74,22 +189,22 @@ Build a VSIX:
 npm run package
 ```
 
-Build and install the VSIX into your current VS Code installation:
+Build and install it into your VS Code:
 
 ```bash
 npm run install:vsix
 ```
 
-Build, uninstall the currently installed extension, and install the new VSIX:
+Build, remove the old install, install the new one:
 
 ```bash
 npm run reinstall:vsix
 ```
 
-Or package without requiring repository metadata:
+Or package without needing git metadata:
 
 ```bash
 npm run package:force
 ```
 
-For development, press `F5` in VS Code to launch an Extension Development Host with this extension loaded. Use `Ctrl+Shift+B` to run the packaging task.
+For hacking on it, open the folder and hit `F5` to get an Extension Development Host. `Ctrl+Shift+B` runs the packaging task.

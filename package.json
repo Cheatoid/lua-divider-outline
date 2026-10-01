@@ -2,7 +2,7 @@
   "name": "lua-divider-outline",
   "displayName": "Lua Divider Outline",
   "description": "Adds 3-line divider headers to the VS Code Outline for Lua files without replacing LuaLS symbols.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "Cheatoid",
   "author": "Cheatoid",
   "license": "MIT",
@@ -47,6 +47,18 @@
           "default": true,
           "description": "Also accept separator lines prefixed with Lua's '--' comment marker."
         },
+        "luaDividerOutline.showHintText": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "markdownDescription": "Show the `divider section` / `divider subsection` hint text on divider entries in the Outline. Off by default, so you just see the titles. Turn it on if you miss the labels. Resource-scoped, so a workspace can change it in `.vscode/settings.json`."
+        },
+        "luaDividerOutline.showLineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Show the line range a divider spans (for example `12-48`) in the Outline. On by default. A section runs from its first line to the line before the next section; a subheader stops at the next subheader or section. Takes precedence over `luaDividerOutline.showHintText`. Resource-scoped, so a workspace can change it in `.vscode/settings.json`."
+        },
         "luaDividerOutline.subheaders.enabled": {
           "type": "boolean",
           "default": true,
@@ -65,8 +77,184 @@
           "minimum": 1,
           "maximum": 500,
           "description": "Maximum number of '-' characters in a one-line subheader on each side of its title."
+        },
+        "luaDividerOutline.insert.defaultTitle": {
+          "type": "string",
+          "default": "Section",
+          "scope": "resource",
+          "markdownDescription": "Title pre-filled on the middle line by the **Insert Divider Section** command.\n\nResource-scoped: override it in your user settings, in workspace settings (`.vscode/settings.json`), or per workspace folder. An empty value falls back to `Section`.\n\nThe inserted titles are left selected so they can be retyped immediately."
+        },
+        "luaDividerOutline.decorations.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Paint divider title lines in the editor. Off if you want the file left alone. Resource-scoped, so a workspace can change it in `.vscode/settings.json`."
+        },
+        "luaDividerOutline.decorations.titleBold": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Make divider title lines bold in the editor. Only applies when decorations are enabled."
+        },
+        "luaDividerOutline.decorations.titleColor": {
+          "type": "string",
+          "default": "#ffffff",
+          "scope": "resource",
+          "markdownDescription": "Color for divider title lines in the editor, for example `#d7a1ff`. Empty means keep the normal comment color. Only applies when decorations are enabled."
+        },
+        "luaDividerOutline.decorations.separatorDim": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Fade the `------` separator lines so the titles stand out. Only applies when decorations are enabled."
+        },
+        "luaDividerOutline.decorations.separatorOpacity": {
+          "type": "number",
+          "default": 0.65,
+          "minimum": 0.1,
+          "maximum": 1,
+          "scope": "resource",
+          "markdownDescription": "How faded the separator lines are, from 0.1 (barely there) to 1 (normal text). Only applies when separator dimming is enabled."
         }
       }
+    },
+    "commands": [
+      {
+        "command": "luaDividerOutline.insertDividerSection",
+        "title": "Insert Divider Section",
+        "category": "Lua Divider Outline"
+      },
+      {
+        "command": "luaDividerOutline.goToNextDivider",
+        "title": "Go to Next Divider Section",
+        "category": "Lua Divider Outline",
+        "enablement": "editorLangId == lua"
+      },
+      {
+        "command": "luaDividerOutline.goToPreviousDivider",
+        "title": "Go to Previous Divider Section",
+        "category": "Lua Divider Outline",
+        "enablement": "editorLangId == lua"
+      },
+      {
+        "command": "luaDividerOutline.copyDividerSection",
+        "title": "Copy Divider Section",
+        "category": "Lua Divider Outline"
+      },
+      {
+        "command": "luaDividerOutline.selectDividerSection",
+        "title": "Select Divider Section",
+        "category": "Lua Divider Outline"
+      },
+      {
+        "command": "luaDividerOutline.cutDividerSection",
+        "title": "Cut Divider Section",
+        "category": "Lua Divider Outline"
+      },
+      {
+        "command": "luaDividerOutline.deleteDividerSection",
+        "title": "Delete Divider Section",
+        "category": "Lua Divider Outline"
+      },
+      {
+        "command": "luaDividerOutline.revealDivider",
+        "title": "Go to Divider Section",
+        "category": "Lua Divider Outline"
+      },
+      {
+        "command": "luaDividerOutline.refreshDividers",
+        "title": "Refresh Lua Dividers",
+        "category": "Lua Divider Outline",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "luaDividerOutline.expandAllDividers",
+        "title": "Expand All",
+        "category": "Lua Divider Outline",
+        "icon": "$(expand-all)"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "luaDividerOutlineView",
+          "name": "Lua Dividers"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "luaDividerOutlineView",
+        "contents": "Open a Lua file with divider sections to see them here.\n[Insert Divider Section](command:luaDividerOutline.insertDividerSection)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "luaDividerOutline.insertDividerSection",
+          "when": "editorLangId == lua",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "luaDividerOutline.selectDividerSection",
+          "when": "editorLangId == lua",
+          "group": "luaDividerOutline@0"
+        },
+        {
+          "command": "luaDividerOutline.copyDividerSection",
+          "when": "editorLangId == lua",
+          "group": "luaDividerOutline@1"
+        },
+        {
+          "command": "luaDividerOutline.cutDividerSection",
+          "when": "editorLangId == lua",
+          "group": "luaDividerOutline@2"
+        },
+        {
+          "command": "luaDividerOutline.deleteDividerSection",
+          "when": "editorLangId == lua",
+          "group": "luaDividerOutline@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "luaDividerOutline.expandAllDividers",
+          "when": "view == luaDividerOutlineView",
+          "group": "navigation@0"
+        },
+        {
+          "command": "luaDividerOutline.refreshDividers",
+          "when": "view == luaDividerOutlineView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "luaDividerOutline.insertDividerSection",
+          "when": "view == luaDividerOutlineView",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "luaDividerOutline.selectDividerSection",
+          "when": "view == luaDividerOutlineView && viewItem =~ /dividerSection|dividerSubsection/",
+          "group": "luaDividerOutline@0"
+        },
+        {
+          "command": "luaDividerOutline.copyDividerSection",
+          "when": "view == luaDividerOutlineView && viewItem =~ /dividerSection|dividerSubsection/",
+          "group": "luaDividerOutline@1"
+        },
+        {
+          "command": "luaDividerOutline.cutDividerSection",
+          "when": "view == luaDividerOutlineView && viewItem =~ /dividerSection|dividerSubsection/",
+          "group": "luaDividerOutline@2"
+        },
+        {
+          "command": "luaDividerOutline.deleteDividerSection",
+          "when": "view == luaDividerOutlineView && viewItem =~ /dividerSection|dividerSubsection/",
+          "group": "luaDividerOutline@3"
+        }
+      ]
     }
   },
   "scripts": {
