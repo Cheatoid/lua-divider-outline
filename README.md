@@ -1,5 +1,10 @@
 # Lua Divider Outline
 
+[![GitHub Repository](https://img.shields.io/github/stars/Cheatoid/lua-divider-outline?style=flat&logo=github&label=GitHub)](https://github.com/Cheatoid/lua-divider-outline)
+[![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline)
+[![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline)
+[![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline#review-details)
+
 Adds custom divider headers to the VS Code Outline for Lua files.
 
 ## Main header

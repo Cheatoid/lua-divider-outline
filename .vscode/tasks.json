@@ -1,0 +1,17 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Check extension",
+      "type": "npm",
+      "script": "check",
+      "problemMatcher": []
+    },
+    {
+      "label": "Package VSIX",
+      "type": "npm",
+      "script": "package",
+      "problemMatcher": []
+    }
+  ]
+}

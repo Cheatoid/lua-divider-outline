@@ -1,0 +1,73 @@
+# EditorConfig: https://EditorConfig.org
+
+# Stop searching for more .editorconfig files above this directory.
+# Must stay `true` to match the parent repo setup.
+root = true
+
+# Default for every file. Sections below only override the keys they list;
+# everything else is inherited from here.
+[*]
+# File encoding.
+charset = utf-8
+# Unix-style line endings (\n). This repository enforces LF for all tracked
+# files (see `git ls-files --eol` showing i/lf w/lf).
+end_of_line = lf
+# Default indentation: tabs (Lua / misc files follow the parent repo).
+indent_style = tab
+# Width of one indentation level when indent_style is tab, and the fallback
+# indent size for sections that switch to space without setting their own size.
+indent_size = 4
+# Remove trailing whitespace on save, except where overridden (e.g. Markdown
+# needs trailing double-spaces for hard line breaks).
+trim_trailing_whitespace = true
+# Ensure files end with a single newline.
+insert_final_newline = true
+# Soft wrap guide; editors may warn or wrap beyond this column.
+max_line_length = 120
+
+# JavaScript sources (extension.js): 2-space indent, single quotes, semicolons,
+# LF, UTF-8, no trailing whitespace, final newline. Longest current line is
+# ~99 chars, so the inherited 120-column guide still applies.
+[*.js]
+# File encoding.
+charset = utf-8
+# Unix-style line endings (\n), matching extension.js on disk (LF only).
+end_of_line = lf
+# extension.js uses spaces, not tabs (verified: 0 tab characters).
+indent_style = space
+# extension.js uses 2-space indent levels.
+indent_size = 2
+# No trailing whitespace in extension.js.
+trim_trailing_whitespace = true
+# extension.js ends with a single newline.
+insert_final_newline = true
+# Keep the parent repo 120-column guide.
+max_line_length = 120
+# Preferred quote style (common EditorConfig extension, not part of the core
+# spec). extension.js uses single quotes exclusively (no double quotes).
+quote_type = single
+
+# Markdown: keep trailing double-spaces for hard line breaks, no fixed wrap.
+[*.md]
+# Use spaces instead of the default tabs.
+indent_style = space
+# Must stay `false`: trailing double-spaces are significant in Markdown.
+trim_trailing_whitespace = false
+# Do not enforce a wrap column for prose.
+max_line_length = unset
+
+# JSON (package.json, tsconfig-style files, .vscode/*.json): 2-space indent.
+[*.json]
+# Use spaces instead of the default tabs.
+indent_style = space
+# package.json / .vscode/*.json use 2-space indent levels.
+indent_size = 2
+# JSON files are machine-formatted; do not enforce a wrap column.
+max_line_length = unset
+
+# YAML: 2-space indent, otherwise parent defaults.
+[*.yml]
+# Use spaces instead of the default tabs.
+indent_style = space
+# YAML convention in the parent repo: 2-space indent levels.
+indent_size = 2

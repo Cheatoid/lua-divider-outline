@@ -1,0 +1,85 @@
+{
+  "name": "lua-divider-outline",
+  "displayName": "Lua Divider Outline",
+  "description": "Adds 3-line divider headers to the VS Code Outline for Lua files without replacing LuaLS symbols.",
+  "version": "0.1.0",
+  "publisher": "Cheatoid",
+  "author": "Cheatoid",
+  "license": "MIT",
+  "homepage": "https://github.com/Cheatoid/lua-divider-outline",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cheatoid/lua-divider-outline"
+  },
+  "bugs": {
+    "url": "https://github.com/Cheatoid/lua-divider-outline/issues"
+  },
+  "keywords": [
+    "lua",
+    "outline",
+    "dividers",
+    "document-symbols"
+  ],
+  "engines": {
+    "vscode": ">=1.138.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:lua"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Lua Divider Outline",
+      "properties": {
+        "luaDividerOutline.separatorLength": {
+          "type": "number",
+          "default": 70,
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Number of '-' characters required on the first and third lines of a main header."
+        },
+        "luaDividerOutline.allowCommentedSeparators": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also accept separator lines prefixed with Lua's '--' comment marker."
+        },
+        "luaDividerOutline.subheaders.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add one-line dashed Lua comments as nested Outline sections."
+        },
+        "luaDividerOutline.subheaders.minimumDashLength": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Minimum number of '-' characters in a one-line subheader on each side of its title."
+        },
+        "luaDividerOutline.subheaders.maximumDashLength": {
+          "type": "number",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Maximum number of '-' characters in a one-line subheader on each side of its title."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js",
+    "package": "npm run check && vsce package",
+    "package:force": "vsce package --allow-missing-repository",
+    "publish": "npm run check && vsce publish",
+    "dev": "npm run check",
+    "clean": "node -e \"const fs=require('fs');for(const f of fs.readdirSync('.').filter(f=>f.endsWith('.vsix')))fs.rmSync(f,{force:true})\"",
+    "install:vsix": "npm run package && code --install-extension lua-divider-outline-${npm_package_version}.vsix",
+    "reinstall:vsix": "npm run package && code --uninstall-extension ${npm_package_publisher}.${npm_package_name} && code --install-extension lua-divider-outline-${npm_package_version}.vsix"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.0.0"
+  }
+}
