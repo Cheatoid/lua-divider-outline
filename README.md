@@ -5,7 +5,10 @@
 [![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline#review-details)
 
-Adds custom divider headers to the VS Code Outline for Lua files.
+![Preview](.resources/preview.png)
+
+Simple and useful productivity boost for (large) Lua files. It adds fast, clean navigation for `--` divider sections directly to the Outline (in Explorer tab), making huge single-file Lua modules much easier to scan and jump around.  
+Especially useful alongside the **Lua/LuaLS (sumneko)** extension, where your custom sections and actual Lua symbols live together in one navigable structure.
 
 ## Main header
 
