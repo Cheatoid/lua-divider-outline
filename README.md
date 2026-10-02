@@ -48,14 +48,23 @@ It uses your `separatorLength`, so the new divider shows up in the Outline right
 
 The word `Section` (or whatever you set) comes out selected, so just type over it.
 
+**Insert Divider Subsection** drops a one-line subheader instead:
+
+```lua
+-- Subsection --------------------------------------------------------
+```
+
+It pads the trailing `-` characters so the line totals your `separatorLength` (70 by default, excluding leading whitespace), clamped into your minimum/maximum dash range so the new line is picked up right away. Same deal: indentation kept, multiple cursors work, one undo step, title left selected.
+
 ## Jumping between dividers
 
-Two palette commands:
+Three palette commands:
 
 - **Lua Divider Outline: Go to Next Divider Section**
 - **Lua Divider Outline: Go to Previous Divider Section**
+- **Lua Divider Outline: Go to Divider Section** (fuzzy QuickPick over every section and subsection, with live preview as you highlight rows)
 
-They jump to the nearest divider title and wrap around at the top/bottom. If there's nothing to jump to, you'll see *No divider sections found* down in the status bar.
+Next/Previous jump to the nearest divider title and wrap around at the top/bottom, including subsections. Set `luaDividerOutline.navigation.includeSubheaders: false` to jump between main sections only. If there's nothing to jump to, you'll see *No divider sections found* down in the status bar.
 
 There are no keybindings by default. If you want some, these two don't clash with much:
 
@@ -66,108 +75,109 @@ There are no keybindings by default. If you want some, these two don't clash wit
 ]
 ```
 
+## Folding dividers
+
+Every section and subsection is a folding range, so **Fold All** (`Ctrl+K Ctrl+0`) collapses the file to its table of contents, and the **Lua Divider Outline: Collapse All** command folds the current Lua file. The **Expand All** button in the **Lua Dividers** view expands the tree back out.
+
 ## One-line subheaders
 
 On by default. These show up nested under the section above them:
 
 ```lua
--- ------------------------------ My Subsection ------------------------------
+-- My Subsection -----------------------------------------------------
+```
+
+A trailing run of at least 2 `-` characters (up to 200) is required — controlled by `luaDividerOutline.subheaders.minimumDashLength` / `maximumDashLength`. A leading run is optional, so the legacy symmetric style also matches:
+
+```lua
+-- --- My Subsection ---
 ```
 
 A subsection covers everything down to the next subsection or section. A section covers everything down to the next section (or the end of the file).
 
-## Right-click: select, copy, cut, delete
+## Right-click: select, copy, cut, delete, rename, duplicate
 
-Right-click in a Lua file and you'll see:
+With `luaDividerOutline.editorContextMenu.enabled: true`, right-click in a Lua file and you'll see:
 
 - **Select Divider Section**
 - **Copy Divider Section**
 - **Cut Divider Section**
 - **Delete Divider Section**
+- **Rename Divider Section**
+- **Duplicate Divider Section**
 
 They grab the whole thing under your cursor, header plus the code below it, down to the next divider. If you're sitting inside a subsection, you get just that subsection. If you're on plain code between subsections, you get the full section.
 
+**Rename** prompts for a new title and rewrites just the title line, keeping the dashes and indentation intact. **Duplicate** copies the section right below itself and jumps to the copy. **Move Divider Section Up / Down** (Command Palette only) swaps a section with its neighbor, or a subsection within its own section — or just drag rows in the **Lua Dividers** view (see below).
+
+Turn the editor entries on with `luaDividerOutline.editorContextMenu.enabled: true` if you want them in the right-click menu. The commands stay available from the Command Palette.
+
 Same commands are also on right-click in the **Lua Dividers** view (Explorer sidebar). VS Code does not let extensions add items to the built-in Outline row menu (see [microsoft/vscode#49925](https://github.com/microsoft/vscode/issues/49925)), so this extension ships its own Dividers tree where Select / Copy / Cut / Delete work from the clicked row, including multi-select. Click a row to jump to its title.
+
+## Drag to reorder in the Lua Dividers view
+
+Left-click-and-drag a row to move it. Dropping onto another row inserts before it; dropping on empty tree space moves to the end. Sections reorder among sections, subsections reorder within their own section. Multi-select drags keep their relative order. Everything lands in one undo step, and the cursor follows the first moved title.
 
 ## Settings
 
-```json
+Here's everything you can tweak, with what each one does:
+
+```jsonc
 {
+  // How long your big divider lines are. 70 looks nice.
   "luaDividerOutline.separatorLength": 70,
+
+  // Also accept separators with "--" in front of the dashes.
   "luaDividerOutline.allowCommentedSeparators": true,
-  "luaDividerOutline.showHintText": false,
-  "luaDividerOutline.showLineNumbers": true,
+
+  // Show little "divider section / subsection" labels in the Outline. Off keeps things clean.
+  "luaDividerOutline.showHintText": false, // per workspace
+
+  // Show line ranges like "12-48" in the Outline. Wins over the hint text above.
+  "luaDividerOutline.showLineNumbers": true, // per workspace
+
+  // Pick up one-line "-- Title ---..." comments as nested Outline entries.
   "luaDividerOutline.subheaders.enabled": true,
-  "luaDividerOutline.subheaders.minimumDashLength": 3,
+
+  // Shortest trailing dash run a subheader needs to count (leading dashes optional).
+  "luaDividerOutline.subheaders.minimumDashLength": 2,
+
+  // Longest dash run a subheader can have before we ignore it.
   "luaDividerOutline.subheaders.maximumDashLength": 200,
-  "luaDividerOutline.insert.defaultTitle": "Section",
-  "luaDividerOutline.decorations.enabled": true,
-  "luaDividerOutline.decorations.titleBold": true,
-  "luaDividerOutline.decorations.titleColor": "#ffffff",
-  "luaDividerOutline.decorations.separatorDim": true,
-  "luaDividerOutline.decorations.separatorOpacity": 0.65
+
+  // Include subsections when jumping to next / previous divider. Off = main sections only.
+  "luaDividerOutline.navigation.includeSubheaders": true, // per workspace
+
+  // The title pre-filled when you insert a section. Empty falls back to "Section".
+  "luaDividerOutline.insert.defaultTitle": "Section", // per workspace
+
+  // Show divider commands in the editor right-click menu. Off by default.
+  "luaDividerOutline.editorContextMenu.enabled": false, // per workspace
+
+  // Paint divider titles in the editor. Off leaves your file alone.
+  "luaDividerOutline.decorations.enabled": true, // per workspace
+
+  // Make divider titles bold.
+  "luaDividerOutline.decorations.titleBold": true, // per workspace
+
+  // Title color, e.g. "#d7a1ff". Empty keeps your theme's comment color.
+  "luaDividerOutline.decorations.titleColor": "#ffffff", // per workspace
+
+  // Make subheader (subsection) titles bold.
+  "luaDividerOutline.decorations.subheaderTitleBold": true, // per workspace
+
+  // Subheader title color, e.g. "#d7a1ff". Empty keeps your theme's comment color.
+  "luaDividerOutline.decorations.subheaderTitleColor": "#ffffff", // per workspace
+
+  // Fade the "------" lines a bit so titles pop.
+  "luaDividerOutline.decorations.separatorDim": true, // per workspace
+
+  // How faded: 0.1 is barely there, 1 is normal text.
+  "luaDividerOutline.decorations.separatorOpacity": 0.5 // per workspace
 }
 ```
 
-By default you see line numbers in the Outline, like this:
-
-```
-Alpha  1-6
-  Sub  5-6
-Beta   7-9
-```
-
-That's `showLineNumbers`. Turn it off and you just get clean titles. Turn `showHintText` on if you want the little `divider section` / `divider subsection` labels back. Line numbers win when both are on. Both are resource-scoped, so a workspace can override them in `.vscode/settings.json`:
-
-```json
-{
-  "luaDividerOutline.showHintText": true
-}
-```
-
-```json
-{
-  "luaDividerOutline.showLineNumbers": false
-}
-```
-
-The insert title is also per-workspace / per-folder. Empty means `Section`:
-
-```json
-{
-  "luaDividerOutline.insert.defaultTitle": "Overview"
-}
-```
-
-## Title styling in the editor
-
-Divider titles get painted right in the file. Bold white by default:
-
-```json
-{
-  "luaDividerOutline.decorations.enabled": true,
-  "luaDividerOutline.decorations.titleBold": true,
-  "luaDividerOutline.decorations.titleColor": "#ffffff"
-}
-```
-
-Both main titles and subheaders use it. Clear it to `""` to keep your theme's comment color. Turn `decorations.enabled` off if you want the file left completely alone.
-
-The `------` lines above and below each title are faded a bit so the title pops. Turn that off with:
-
-```json
-{
-  "luaDividerOutline.decorations.separatorDim": false
-}
-```
-
-Or dial how faded they are, from `0.1` (barely there) to `1` (normal text):
-
-```json
-{
-  "luaDividerOutline.decorations.separatorOpacity": 0.65
-}
-```
+Small notes: with line numbers on you'll see things like `Alpha  1-6`. And the insert title comes out selected, so just type over it.
 
 ## Development
 
