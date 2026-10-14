@@ -2,7 +2,7 @@
   "name": "lua-divider-outline",
   "displayName": "Lua Divider Outline",
   "description": "Adds custom divider headers to the VS Code Outline for Lua files. Allows quick reordering, and jumping in large modules. Fully customizable.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "Cheatoid",
   "author": "Cheatoid",
   "license": "MIT",
@@ -40,7 +40,14 @@
           "default": 70,
           "minimum": 1,
           "maximum": 500,
-          "description": "Number of '-' characters required on the first and third lines of a main header."
+          "description": "Separator width for a main header (see also separatorLengthTolerance). Plain lines need this many chars ('-', '─', '═' or '=', homogeneous, same character top and bottom); '--'-commented lines match when the body alone or the total width including '--' hits it (e.g. '--' + 57x '─' needs 59)."
+        },
+        "luaDividerOutline.separatorLengthTolerance": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 50,
+          "markdownDescription": "Allowed deviation from `separatorLength` for main divider lines, in percent (`0` = exact lengths, the default). A commented line matches when its run length or its total width including `--` is within tolerance — e.g. with length 70, `15` accepts a 59-char `--` + 57× `─` line. Enter a number between 0 and 50."
         },
         "luaDividerOutline.allowCommentedSeparators": {
           "type": "boolean",
@@ -69,14 +76,14 @@
           "default": 2,
           "minimum": 1,
           "maximum": 200,
-          "description": "Minimum number of '-' characters in a one-line subheader on each side of its title."
+          "description": "Minimum trailing run of separator characters ('-', '─', '═' or '=') for a one-line subheader to count. A leading run is optional."
         },
         "luaDividerOutline.subheaders.maximumDashLength": {
           "type": "number",
           "default": 200,
           "minimum": 1,
           "maximum": 500,
-          "description": "Maximum number of '-' characters in a one-line subheader on each side of its title."
+          "description": "Maximum trailing run of separator characters ('-', '─', '═' or '=') for a one-line subheader to count. A leading run is optional."
         },
         "luaDividerOutline.navigation.includeSubheaders": {
           "type": "boolean",
@@ -238,6 +245,7 @@
         {
           "id": "luaDividerOutlineView",
           "name": "Lua Dividers",
+          "icon": "$(list-tree)",
           "enableDragAndDrop": true
         }
       ]

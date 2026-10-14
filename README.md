@@ -5,7 +5,7 @@
 [![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/Cheatoid.lua-divider-outline)](https://marketplace.visualstudio.com/items?itemName=Cheatoid.lua-divider-outline#review-details)
 
-![Preview](.resources/preview.png)
+![Preview](https://raw.github.com/Cheatoid/lua-divider-outline/main/.resources/preview.png)
 
 If your Lua files get long, this helps. It picks up your `--` divider comments and shows them in the Outline (in the Explorer tab), so you can jump around a big file without scrolling forever.
 
@@ -21,14 +21,26 @@ This is what it looks for by default:
 ----------------------------------------------------------------------
 ```
 
-Both separator lines need exactly 70 `-` characters unless you change the setting. The middle line has to be a `--` comment with your title on it.
+Both separator lines need exactly 70 separator characters unless you change the setting (or allow deviation with `separatorLengthTolerance`). Each line must repeat one of `-`, `─`, `═` or `=` (for example 70x `-` or 70x `═`), and both lines must use the same character. The middle line has to be a `--` comment with your title on it.
 
-Lines with `--` in front of the dashes work too:
+Lines with `--` in front of the dashes work too, in either counting style — body of 70, or 70 total characters including the `--` (so `--` + 68x `─` also matches):
 
 ```lua
 -- ----------------------------------------------------------------------
 -- My Section
 -- ----------------------------------------------------------------------
+```
+
+```lua
+--------------------------------------------------------------------------------
+-- My 80-wide Section (with `"luaDividerOutline.separatorLength": 80`)
+--------------------------------------------------------------------------------
+```
+
+```lua
+--──────────────────────────────────────────────────────────────────────────────
+-- Same 80 characters, commented (`--` + 78x `─`)
+--──────────────────────────────────────────────────────────────────────────────
 ```
 
 Only Lua files get scanned.
@@ -87,7 +99,7 @@ On by default. These show up nested under the section above them:
 -- My Subsection -----------------------------------------------------
 ```
 
-A trailing run of at least 2 `-` characters (up to 200) is required — controlled by `luaDividerOutline.subheaders.minimumDashLength` / `maximumDashLength`. A leading run is optional, so the legacy symmetric style also matches:
+A trailing run of at least 2 separator characters (`-`, `─`, `═` or `=`, up to 200) is required — controlled by `luaDividerOutline.subheaders.minimumDashLength` / `maximumDashLength`. Each run must repeat a single character. A leading run is optional, so the legacy symmetric style also matches:
 
 ```lua
 -- --- My Subsection ---
@@ -116,7 +128,7 @@ Same commands are also on right-click in the **Lua Dividers** view (Explorer sid
 
 ## Drag to reorder in the Lua Dividers view
 
-Left-click-and-drag a row to move it. Dropping onto another row inserts before it; dropping on empty tree space moves to the end. Sections reorder among sections, subsections reorder within their own section. Multi-select drags keep their relative order. Everything lands in one undo step, and the cursor follows the first moved title.
+Left-click-and-drag a row to move it. Dropping onto another row inserts before it — except dragging down onto the immediately following row, which moves after it so the two swap; dropping on empty tree space moves to the end. Sections reorder among sections, subsections reorder within their own section. Multi-select drags keep their relative order. Everything lands in one undo step, and the cursor follows the first moved title.
 
 ## Settings
 
@@ -126,6 +138,12 @@ Here's everything you can tweak, with what each one does:
 {
   // How long your big divider lines are. 70 looks nice.
   "luaDividerOutline.separatorLength": 70,
+
+  // Allowed deviation from separatorLength, in percent (0 = exact). A
+  // commented line matches when its run or its total width incl. `--` is
+  // within tolerance: with 70, 15 accepts a 59-char `--` + 57x `─` line.
+  // Number, 0–50.
+  "luaDividerOutline.separatorLengthTolerance": 0,
 
   // Also accept separators with "--" in front of the dashes.
   "luaDividerOutline.allowCommentedSeparators": true,

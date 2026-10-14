@@ -8,7 +8,9 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}"
       ],
-      "outFiles": []
+      "outFiles": [
+        "${workspaceFolder}/out/**/*.js"
+      ]
     }
   ]
 }

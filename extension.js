@@ -131,15 +131,79 @@ function computeLongStringMask(document) {
   return mask;
 }
 
-function findDividerSections(document, separatorLength, allowCommentedSeparators) {
-  const mainSeparator = new RegExp(
-    `^\\s*-{${separatorLength}}\\s*$`
-  );
+// Valid separator characters for main dividers: '-', '─' (U+2500),
+// '═' (U+2550) and '='. Each separator line must be a homogeneous run of
+// one of these, and the top/bottom lines of a banner must use the same
+// character (so 70x '-' or 70x '═', never mixed). Plain lines need exactly
+// `separatorLength` characters; `--`-commented lines match when either the
+// body alone or the total width including `--` is exactly `separatorLength`
+// (e.g. with 70: `-- ` + 70x '-' or `--` + 68x '─'; with 59: `--` + 57x '─').
+const SEPARATOR_CHARS = new Set(['-', '─', '═', '=']);
 
-  const commentedMainSeparator = allowCommentedSeparators
-    ? new RegExp(`^\\s*--\\s*-{${separatorLength}}\\s*$`)
+function homogeneousSeparatorChar(body) {
+  if (!body) {
+    return null;
+  }
+  const ch = body[0];
+  if (!SEPARATOR_CHARS.has(ch)) {
+    return null;
+  }
+  for (let i = 1; i < body.length; i++) {
+    if (body[i] !== ch) {
+      return null;
+    }
+  }
+  return ch;
+}
+
+// Allowed length deviation around `separatorLength`, in percent (0 = exact).
+// Covers fallback fonts whose glyph advance differs from the editor font,
+// e.g. an 80-char `--` + 78x '─' line rendering as wide as 70x '-'.
+function clampTolerancePercent(value) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(50, parsed));
+}
+
+function lengthTolerance(want, tolerancePct) {
+  return Math.round(want * clampTolerancePercent(tolerancePct) / 100);
+}
+
+function lengthMatches(len, want, tolerancePct) {
+  return Math.abs(len - want) <= lengthTolerance(want, tolerancePct);
+}
+
+function getSeparatorChar(lineText, separatorLength, allowCommentedSeparators, tolerancePct = 0) {
+  const want = Math.floor(Number(separatorLength));
+  if (!Number.isFinite(want)) {
+    return null;
+  }
+  const plain = /^\s*([-─═=]+)\s*$/.exec(lineText);
+  const commented = allowCommentedSeparators
+    ? /^\s*(--\s*)([-─═=]+)\s*$/.exec(lineText)
     : null;
+  // Commented first: `--` itself is made of a valid separator character, so
+  // the plain pattern would also swallow commented lines (and misjudge
+  // `--` + 78x '─' as a mixed run). A commented line matches when its run
+  // length or its total width including `--` is in tolerance.
+  if (commented) {
+    const prefix = commented[1];
+    const body = commented[2];
+    const ch = homogeneousSeparatorChar(body);
+    if (ch && (lengthMatches(body.length, want, tolerancePct) || lengthMatches(prefix.length + body.length, want, tolerancePct))) {
+      return ch;
+    }
+    return null;
+  }
+  if (plain) {
+    return lengthMatches(plain[1].length, want, tolerancePct) ? homogeneousSeparatorChar(plain[1]) : null;
+  }
+  return null;
+}
 
+function findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct = 0) {
   const headers = [];
 
   const longStringMask = computeLongStringMask(document);
@@ -154,12 +218,10 @@ function findDividerSections(document, separatorLength, allowCommentedSeparators
     const title = document.lineAt(i + 1).text;
     const third = document.lineAt(i + 2).text;
 
-    const firstMatches = mainSeparator.test(first) ||
-      (commentedMainSeparator && commentedMainSeparator.test(first));
-    const thirdMatches = mainSeparator.test(third) ||
-      (commentedMainSeparator && commentedMainSeparator.test(third));
+    const firstChar = getSeparatorChar(first, separatorLength, allowCommentedSeparators, tolerancePct);
+    const thirdChar = getSeparatorChar(third, separatorLength, allowCommentedSeparators, tolerancePct);
 
-    if (!firstMatches || !thirdMatches) {
+    if (!firstChar || !thirdChar || firstChar !== thirdChar) {
       continue;
     }
 
@@ -200,10 +262,16 @@ function buildSubheaderRegExp(subheadersEnabled, subMin, subMax) {
   if (!subheadersEnabled) {
     return null;
   }
-  // Leading dashes are optional so both the legacy symmetric style
-  // (`-- --- Title ---`) and the padded style (`-- Title ---...`) match.
+  const lo = Math.max(1, Math.floor(Number(subMin)) || 2);
+  const hi = Math.max(lo, Math.floor(Number(subMax)) || 200);
+  // Same separator characters as main dividers ('-', '─', '═', '=').
+  // Alternation keeps each run homogeneous so `-- Title -═-` never matches,
+  // while staying in one capturing group for the title (group 1) like before.
+  // Leading dashes stay optional for the legacy symmetric style
+  // (`-- --- Title ---`) and the padded style (`-- Title ---...`).
+  const run = `(?:-{${lo},${hi}}|─{${lo},${hi}}|═{${lo},${hi}}|={${lo},${hi}})`;
   return new RegExp(
-    `^\\s*--\\s+(?:-{${subMin},${subMax}}\\s+)?(.+?)\\s+-{${subMin},${subMax}}\\s*$`
+    `^\\s*--\\s+(?:${run}\\s+)?(.+?)\\s+${run}\\s*$`
   );
 }
 
@@ -211,12 +279,14 @@ function getDividerConfig(document) {
   const config = vscode.workspace.getConfiguration('luaDividerOutline', document.uri);
   const separatorLength = config.get('separatorLength', 70);
   const allowCommentedSeparators = config.get('allowCommentedSeparators', true);
+  const tolerancePct = clampTolerancePercent(config.get('separatorLengthTolerance', 0));
   const subheadersEnabled = config.get('subheaders.enabled', true);
   const subMin = config.get('subheaders.minimumDashLength', 2);
   const subMax = config.get('subheaders.maximumDashLength', 200);
   return {
     separatorLength,
     allowCommentedSeparators,
+    tolerancePct,
     subheader: buildSubheaderRegExp(subheadersEnabled, subMin, subMax)
   };
 }
@@ -256,8 +326,8 @@ function findEnclosingDivider(document, line) {
   if (line < 0 || line >= document.lineCount) {
     return null;
   }
-  const { separatorLength, allowCommentedSeparators, subheader } = getDividerConfig(document);
-  const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators);
+  const { separatorLength, allowCommentedSeparators, tolerancePct, subheader } = getDividerConfig(document);
+  const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
 
   if (mainHeaders.length > 0) {
     for (let index = 0; index < mainHeaders.length; index++) {
@@ -358,6 +428,7 @@ class LuaDividerOutlineProvider {
     const config = vscode.workspace.getConfiguration('luaDividerOutline', document.uri);
     const separatorLength = config.get('separatorLength', 70);
     const allowCommentedSeparators = config.get('allowCommentedSeparators', true);
+    const tolerancePct = clampTolerancePercent(config.get('separatorLengthTolerance', 0));
     const subheadersEnabled = config.get('subheaders.enabled', true);
     const subMin = config.get('subheaders.minimumDashLength', 2);
     const subMax = config.get('subheaders.maximumDashLength', 200);
@@ -369,7 +440,7 @@ class LuaDividerOutlineProvider {
     const subheader = buildSubheaderRegExp(subheadersEnabled, subMin, subMax);
 
     const symbols = [];
-    const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators);
+    const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
 
     // Main headers become top-level symbols. Their ranges extend to the next
     // main header, allowing nested subheaders and ordinary LuaLS symbols to sit
@@ -676,10 +747,11 @@ function collectGoToStops(document) {
   const config = vscode.workspace.getConfiguration('luaDividerOutline', document.uri);
   const separatorLength = config.get('separatorLength', 70);
   const allowCommentedSeparators = config.get('allowCommentedSeparators', true);
+  const tolerancePct = clampTolerancePercent(config.get('separatorLengthTolerance', 0));
   const includeSubs = config.get('navigation.includeSubheaders', true);
   const { subheader } = getDividerConfig(document);
   const stops = [];
-  const sections = findDividerSections(document, separatorLength, allowCommentedSeparators);
+  const sections = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
 
   for (let index = 0; index < sections.length; index++) {
     const header = sections[index];
@@ -814,19 +886,107 @@ function dedupeDividerTargets(targets) {
   return deduped;
 }
 
+function dividerUriToString(value) {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value) {
+    try {
+      const direct = value.toString();
+      if (direct !== '[object Object]') {
+        return direct;
+      }
+    } catch (error) {
+      // Fall through to plain-object revival below.
+    }
+    // Deserialized Uri (structured clone / JSON round-trip gives
+    // `{ $mid: 1, scheme, path, ... }` without methods). Revive it so
+    // cross-file checks and editor lookup compare real uri strings
+    // instead of "[object Object]".
+    try {
+      if (vscode.Uri && typeof vscode.Uri.revive === 'function' && typeof value.path === 'string') {
+        return vscode.Uri.revive(value).toString();
+      }
+    } catch (error) {
+      // Fall through to manual reconstruction below.
+    }
+    if (typeof value.external === 'string') {
+      return value.external;
+    }
+    if (typeof value.path === 'string' && typeof value.scheme === 'string') {
+      return `${value.scheme}:${value.path}`;
+    }
+    if (typeof value.fsPath === 'string') {
+      try {
+        if (vscode.Uri && typeof vscode.Uri.file === 'function') {
+          return vscode.Uri.file(value.fsPath).toString();
+        }
+      } catch (error) {
+        // Ignore and fall through to String().
+      }
+      return value.fsPath;
+    }
+  }
+  return String(value);
+}
+
+function dividerUriFromStored(value) {
+  if (typeof value === 'string') {
+    // Stored as string by handleDrag (robust against DataTransfer
+    // cloning which strips Uri methods). Parse back to a Uri.
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
+      try {
+        return vscode.Uri.parse(value);
+      } catch (error) {
+        // Fall through to file path handling below.
+      }
+    }
+    try {
+      return vscode.Uri.file(value);
+    } catch (error) {
+      return vscode.Uri.parse(value);
+    }
+  }
+  if (value) {
+    try {
+      const direct = value.toString();
+      if (direct !== '[object Object]') {
+        return value;
+      }
+    } catch (error) {
+      // Fall through to revival below.
+    }
+    try {
+      if (vscode.Uri && typeof vscode.Uri.revive === 'function' && typeof value.path === 'string') {
+        return vscode.Uri.revive(value);
+      }
+    } catch (error) {
+      // Ignore and try manual reconstruction.
+    }
+    if (typeof value.fsPath === 'string') {
+      return vscode.Uri.file(value.fsPath);
+    }
+    if (typeof value.path === 'string') {
+      return vscode.Uri.parse(`${value.scheme || 'file'}:${value.path}`);
+    }
+  }
+  return value;
+}
+
 async function getEditorForDocumentUri(uri) {
-  const key = uri.toString();
+  const normalized = dividerUriFromStored(uri);
+  const key = dividerUriToString(normalized);
   const visible = (vscode.window.visibleTextEditors || []).find(
-    (candidate) => candidate.document.uri.toString() === key
+    (candidate) => dividerUriToString(candidate.document.uri) === key
   );
   if (visible) {
     return visible;
   }
   const active = vscode.window.activeTextEditor;
-  if (active && active.document.uri.toString() === key) {
+  if (active && dividerUriToString(active.document.uri) === key) {
     return active;
   }
-  const document = await vscode.workspace.openTextDocument(uri);
+  const document = await vscode.workspace.openTextDocument(normalized);
   return vscode.window.showTextDocument(document);
 }
 
@@ -1093,14 +1253,14 @@ async function selectDividerSection(firstArg, secondArg) {
 // divider shape.
 function renamedSectionTitleLine(lineText, newTitle) {
   const match = /^(\s*--\s*)(.*?)(\s*)$/.exec(lineText);
-  if (!match || !match[2] || /^-+$/.test(match[2].trim())) {
+  if (!match || !match[2] || /^[-─═=]+$/.test(match[2].trim())) {
     return null;
   }
   return match[1] + newTitle + match[3];
 }
 
 function renamedSubsectionLine(lineText, newTitle, totalLength, subMin, subMax) {
-  const match = /^(\s*--\s+(?:-+\s+)?)(.+?)(\s+-+\s*)$/.exec(lineText);
+  const match = /^(\s*--\s+(?:[-─═=]+\s+)?)(.+?)(\s+[-─═=]+\s*)$/.exec(lineText);
   if (!match) {
     return null;
   }
@@ -1122,12 +1282,16 @@ function renamedSubsectionLine(lineText, newTitle, totalLength, subMin, subMax) 
   const hi = Math.max(lo, Math.floor(Number(subMax)) || 200);
   const raw = target - (prefixWithoutIndent.length + newTitle.length + 1);
   const dashCount = Math.min(Math.max(raw, lo), hi);
-  return indent + prefixWithoutIndent + newTitle + ' ' + '-'.repeat(dashCount);
+  // Re-pad with the original trailing character so `-- Title ═══...`
+  // stays `═` (and `-- Title ---...` stays `-`) after a rename.
+  const trailBody = /([-─═=]+)/.exec(match[3]);
+  const trailChar = trailBody ? trailBody[1][0] : '-';
+  return indent + prefixWithoutIndent + newTitle + ' ' + trailChar.repeat(dashCount);
 }
 
 function findSectionHeaderByStart(document, startLine) {
-  const { separatorLength, allowCommentedSeparators } = getDividerConfig(document);
-  const headers = findDividerSections(document, separatorLength, allowCommentedSeparators);
+  const { separatorLength, allowCommentedSeparators, tolerancePct } = getDividerConfig(document);
+  const headers = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
   return headers.find((header) => header.startLine === startLine) || null;
 }
 
@@ -1384,8 +1548,8 @@ function dividerTreeEntries(document) {
   const config = vscode.workspace.getConfiguration('luaDividerOutline', document.uri);
   const showHintText = config.get('showHintText', false);
   const showLineNumbers = config.get('showLineNumbers', true);
-  const { separatorLength, allowCommentedSeparators, subheader } = getDividerConfig(document);
-  const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators);
+  const { separatorLength, allowCommentedSeparators, tolerancePct, subheader } = getDividerConfig(document);
+  const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
   const entries = [];
 
   for (let index = 0; index < mainHeaders.length; index++) {
@@ -1582,6 +1746,24 @@ function orderLabelsAfterMove(currentOrder, sourceStarts, insertBeforeStart, app
   return remaining.slice(0, idx).concat(moved, remaining.slice(idx));
 }
 
+// Sibling-order preview for dropping *after* a target row: the moved block
+// lands immediately after the target in `remaining` order.
+function orderLabelsAfterMoveAfter(currentOrder, sourceStarts, insertAfterStart) {
+  const remaining = currentOrder.filter((item) => !sourceStarts.has(item.startLine));
+  const moved = currentOrder.filter((item) => sourceStarts.has(item.startLine));
+  const idx = remaining.findIndex((item) => item.startLine === insertAfterStart);
+  if (idx < 0) {
+    return remaining.concat(moved);
+  }
+  return remaining.slice(0, idx + 1).concat(moved, remaining.slice(idx + 1));
+}
+
+// Every source sits strictly before the target row, so moving "after" it is
+// safe: target.endLine + 1 cannot land inside a source range.
+function allSourcesBeforeTarget(orderedSources, targetStartLine) {
+  return orderedSources.every((s) => s.endLine < targetStartLine);
+}
+
 function sameOrder(a, b) {
   if (a.length !== b.length) {
     return false;
@@ -1594,7 +1776,9 @@ function sameOrder(a, b) {
   return true;
 }
 
-// Pure drop planner: same-level only, drop = insert before target.
+// Pure drop planner: same-level only. Dropping onto a row inserts before it,
+// except dragging down onto the immediately following row(s) inserts after
+// it so the rows swap instead of reporting "Already there."
 // entries: dividerTreeEntries(document). sources: [{startLine,endLine,kind}].
 // target: {startLine,endLine,kind} | undefined (root/empty = move to end).
 // Returns {ok, reason, orderedSources, insertLine, moveKind} and never touches vscode.
@@ -1660,6 +1844,17 @@ function planDividerDrop(entries, rawSources, rawTarget) {
     const sourceStarts = new Set(orderedSources.map((s) => s.startLine));
     const nextOrder = orderLabelsAfterMove(currentOrder, sourceStarts, insertLine, appendToEnd);
     if (sameOrder(currentOrder, nextOrder)) {
+      // Inserting before would be a no-op: the dragged rows already sit
+      // immediately before the target (e.g. dragging "Example Subsection"
+      // down onto "Unicode Test"). Drop after the target instead so the
+      // rows swap rather than doing nothing.
+      if (!appendToEnd && rawTarget && allSourcesBeforeTarget(orderedSources, rawTarget.startLine)) {
+        const afterTarget = byStart.get(rawTarget.startLine);
+        const afterOrder = orderLabelsAfterMoveAfter(currentOrder, sourceStarts, rawTarget.startLine);
+        if (afterTarget && !sameOrder(currentOrder, afterOrder)) {
+          return { ok: true, orderedSources, insertLine: afterTarget.endLine + 1, appendToEnd: false, moveKind, targetLabel, insertAfter: true };
+        }
+      }
       return { ok: false, noop: true, reason: 'Already there.' };
     }
     return { ok: true, orderedSources, insertLine, appendToEnd, moveKind, targetLabel };
@@ -1694,7 +1889,18 @@ function planDividerDrop(entries, rawSources, rawTarget) {
     }
     const currentOrder = siblings.map((s) => ({ startLine: s.startLine }));
     const sourceStarts = new Set(orderedSources.map((s) => s.startLine));
-    if (sameOrder(currentOrder, orderLabelsAfterMove(currentOrder, sourceStarts, insertLine, appendToEnd))) {
+    const nextOrder = orderLabelsAfterMove(currentOrder, sourceStarts, insertLine, appendToEnd);
+    if (sameOrder(currentOrder, nextOrder)) {
+      // Same adjacent-block case as sections: dragging down onto the
+      // immediately following sibling would be a no-op with insert-before,
+      // so drop after it instead.
+      if (!appendToEnd && rawTarget && allSourcesBeforeTarget(orderedSources, rawTarget.startLine)) {
+        const targetEntry = byStart.get(rawTarget.startLine);
+        const afterOrder = orderLabelsAfterMoveAfter(currentOrder, sourceStarts, rawTarget.startLine);
+        if (targetEntry && !sameOrder(currentOrder, afterOrder)) {
+          return { ok: true, orderedSources, insertLine: targetEntry.endLine + 1, appendToEnd: false, moveKind, targetLabel, insertAfter: true };
+        }
+      }
       return { ok: false, noop: true, reason: 'Already there.' };
     }
     return { ok: true, orderedSources, insertLine, appendToEnd, moveKind, targetLabel };
@@ -1733,6 +1939,16 @@ function planDividerDrop(entries, rawSources, rawTarget) {
     const sourceStarts = new Set(orderedSources.map((s) => s.startLine));
     const nextOrder = orderLabelsAfterMove(currentOrder, sourceStarts, target.startLine, false);
     if (sameOrder(currentOrder, nextOrder)) {
+      // Inserting before would be a no-op: the dragged rows already sit
+      // immediately before the target (e.g. dragging "Example Subsection"
+      // down onto "Unicode Test"). Drop after the target instead so the
+      // rows swap rather than doing nothing.
+      if (allSourcesBeforeTarget(orderedSources, target.startLine)) {
+        const afterOrder = orderLabelsAfterMoveAfter(currentOrder, sourceStarts, target.startLine);
+        if (!sameOrder(currentOrder, afterOrder)) {
+          return { ok: true, orderedSources, insertLine: target.endLine + 1, appendToEnd: false, moveKind, targetLabel: target.label, parent, insertAfter: true };
+        }
+      }
       return { ok: false, noop: true, reason: 'Already there.' };
     }
     return { ok: true, orderedSources, insertLine: target.startLine, appendToEnd: false, moveKind, targetLabel: target.label, parent };
@@ -1789,6 +2005,16 @@ function reorderDividerLines(allLines, orderedSources, insertLine) {
 }
 
 function normalizeDragPayload(value) {
+  // DataTransfer may hand back a JSON string (cross-window drags serialize
+  // the payload). Parse it so drops still work instead of silently doing
+  // nothing.
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch (error) {
+      return [];
+    }
+  }
   const out = [];
   const push = (candidate) => {
     if (!candidate || !Number.isInteger(candidate.startLine) || !Number.isInteger(candidate.endLine)) {
@@ -1799,7 +2025,7 @@ function normalizeDragPayload(value) {
       endLine: candidate.endLine,
       kind: candidate.kind === 'subsection' ? 'subsection' : 'section',
       name: typeof candidate.name === 'string' ? candidate.name : (typeof candidate.label === 'string' ? candidate.label : 'Section'),
-      documentUri: candidate.documentUri,
+      documentUri: dividerUriToString(candidate.documentUri),
     });
   };
   if (Array.isArray(value)) {
@@ -1818,7 +2044,10 @@ function dragPayloadFromTreeItems(items) {
     endLine: item.dividerEndLine,
     kind: item.dividerKind === 'subsection' ? 'subsection' : 'section',
     name: typeof item.label === 'string' ? item.label : String(item.label || 'Section'),
-    documentUri: item.dividerDocumentUri,
+    // Store as a plain string: DataTransfer structured-clones the payload
+    // and a Uri instance would come back as `{ $mid: 1, ... }` without
+    // methods, breaking cross-file checks ("[object Object]").
+    documentUri: dividerUriToString(item.dividerDocumentUri),
   }));
 }
 
@@ -1867,13 +2096,13 @@ class DividerDragAndDropController {
     if (!payload.length) {
       return;
     }
-    const uriStrings = new Set(payload.map((p) => String(p.documentUri)));
+    const uriStrings = new Set(payload.map((p) => dividerUriToString(p.documentUri)));
     if (uriStrings.size > 1) {
       vscode.window.showInformationMessage('Drag dividers from one file at a time.');
       return;
     }
     if (target && isDividerTreeItem(target)) {
-      const targetUri = String(target.dividerDocumentUri);
+      const targetUri = dividerUriToString(target.dividerDocumentUri);
       if (!uriStrings.has(targetUri)) {
         vscode.window.showInformationMessage('Cannot drop dividers across files.');
         return;
@@ -1913,7 +2142,8 @@ class DividerDragAndDropController {
     editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
     const movedLabel = first.name || 'divider';
     if (plan.targetLabel) {
-      vscode.window.setStatusBarMessage(`Moved '${movedLabel}' before '${plan.targetLabel}'`, 3000);
+      const where = plan.insertAfter ? 'after' : 'before';
+      vscode.window.setStatusBarMessage(`Moved '${movedLabel}' ${where} '${plan.targetLabel}'`, 3000);
     } else {
       vscode.window.setStatusBarMessage(
         plan.orderedSources.length === 1 ? `Moved '${movedLabel}' to the end` : `Moved ${plan.orderedSources.length} dividers to the end`,
@@ -1928,7 +2158,7 @@ class LuaDividerFoldingProvider {
     if (document.languageId !== 'lua') {
       return [];
     }
-    const { separatorLength, allowCommentedSeparators, subheader } = getDividerConfig(document);
+    const { separatorLength, allowCommentedSeparators, tolerancePct, subheader } = getDividerConfig(document);
     const ranges = [];
     const push = (startLine, endLine) => {
       if (endLine > startLine) {
@@ -1936,7 +2166,7 @@ class LuaDividerFoldingProvider {
         ranges.push(new vscode.FoldingRange(startLine, endLine, kind));
       }
     };
-    const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators);
+    const mainHeaders = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
     for (let index = 0; index < mainHeaders.length; index++) {
       const header = mainHeaders[index];
       const next = mainHeaders[index + 1];
@@ -2161,9 +2391,9 @@ function createSeparatorDecorationType(dim, opacity) {
   return separatorDecorationType;
 }
 
-function collectMainTitleRanges(document, separatorLength, allowCommentedSeparators) {
+function collectMainTitleRanges(document, separatorLength, allowCommentedSeparators, tolerancePct = 0) {
   const ranges = [];
-  const mains = findDividerSections(document, separatorLength, allowCommentedSeparators);
+  const mains = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
   for (const header of mains) {
     ranges.push(document.lineAt(header.titleLine).range);
   }
@@ -2188,15 +2418,15 @@ function collectSubheaderTitleRanges(document, subheader) {
   return ranges;
 }
 
-function collectTitleRanges(document, separatorLength, allowCommentedSeparators, subheader) {
-  return collectMainTitleRanges(document, separatorLength, allowCommentedSeparators).concat(
+function collectTitleRanges(document, separatorLength, allowCommentedSeparators, tolerancePct, subheader) {
+  return collectMainTitleRanges(document, separatorLength, allowCommentedSeparators, tolerancePct).concat(
     collectSubheaderTitleRanges(document, subheader)
   );
 }
 
-function collectSeparatorRanges(document, separatorLength, allowCommentedSeparators) {
+function collectSeparatorRanges(document, separatorLength, allowCommentedSeparators, tolerancePct = 0) {
   const ranges = [];
-  const mains = findDividerSections(document, separatorLength, allowCommentedSeparators);
+  const mains = findDividerSections(document, separatorLength, allowCommentedSeparators, tolerancePct);
   for (const header of mains) {
     ranges.push(document.lineAt(header.startLine).range);
     ranges.push(document.lineAt(header.endLine).range);
@@ -2215,9 +2445,9 @@ function refreshTitleDecorations(editor) {
     // Disposing the decoration types already clears them.
     return;
   }
-  const { separatorLength, allowCommentedSeparators, subheader } = getDividerConfig(document);
+  const { separatorLength, allowCommentedSeparators, tolerancePct, subheader } = getDividerConfig(document);
   if (titleDecorationType) {
-    const ranges = collectMainTitleRanges(document, separatorLength, allowCommentedSeparators);
+    const ranges = collectMainTitleRanges(document, separatorLength, allowCommentedSeparators, tolerancePct);
     editor.setDecorations(titleDecorationType, ranges);
   }
   if (subheaderTitleDecorationType) {
@@ -2225,7 +2455,7 @@ function refreshTitleDecorations(editor) {
     editor.setDecorations(subheaderTitleDecorationType, ranges);
   }
   if (separatorDecorationType) {
-    const ranges = collectSeparatorRanges(document, separatorLength, allowCommentedSeparators);
+    const ranges = collectSeparatorRanges(document, separatorLength, allowCommentedSeparators, tolerancePct);
     editor.setDecorations(separatorDecorationType, ranges);
   }
 }
@@ -2357,6 +2587,10 @@ module.exports = {
   // Exported for tests; harmless in production.
   __test: {
     findDividerSections,
+    getSeparatorChar,
+    SEPARATOR_CHARS,
+    clampTolerancePercent,
+    lengthTolerance,
     buildSubheaderRegExp,
     collectChildMatches,
     childEndLine,
@@ -2385,8 +2619,14 @@ module.exports = {
     findParentSectionForLine,
     planDividerDrop,
     reorderDividerLines,
+    orderLabelsAfterMove,
+    orderLabelsAfterMoveAfter,
+    allSourcesBeforeTarget,
+    sameOrder,
     normalizeDragPayload,
     dragPayloadFromTreeItems,
+    dividerUriToString,
+    dividerUriFromStored,
     performDividerMove,
     revealDivider,
     expandAllDividers,
